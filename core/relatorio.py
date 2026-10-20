@@ -52,8 +52,20 @@ def _img(png, largura=170, legenda=""):
     return ("img", png, largura, legenda)
 
 
-def _md(t, titulo="Explicação escrita pelo Gemini"):
-    return ("md", t, titulo)
+def _md(t, titulo="Explicação escrita pelo Gemini", modelo=""):
+    return ("md", t, titulo, modelo)
+
+
+def _modelo_txt(textos_ia: dict, chave: str) -> str:
+    """Legenda com o modelo que gerou o texto (e o pedido, se houve troca automática)."""
+    usado = textos_ia.get(f"{chave}_modelo")
+    if not usado:
+        return ""
+    pedido = textos_ia.get(f"{chave}_pedido")
+    if pedido and pedido != usado:
+        return (f"Texto gerado pelo modelo {usado} (troca automática: o modelo escolhido, "
+                f"{pedido}, não respondeu).")
+    return f"Texto gerado pelo modelo {usado}."
 
 
 LARG_CASOS = [26, 34, 16, 16, 16, 18, 20, 13, 19]
@@ -91,13 +103,13 @@ def montar_blocos(a: dict, textos_ia: dict[str, str], meta: dict) -> list:
         B.append(_h2("Casos combinando os três parâmetros"))
         B.append(_tab(tabelas.casos(s1["casos_cmb"], params), lc, fonte=6.5))
     if textos_ia.get("s1"):
-        B.append(_md(textos_ia["s1"]))
+        B.append(_md(textos_ia["s1"], modelo=_modelo_txt(textos_ia, "s1")))
 
     # --- Sprint 2 --------------------------------------------------------------
     B.append(_h1("Sprint 2 — Caixa-Branca: GFC e Complexidade Ciclomática"))
     B.append(_p("Um nó reúne comandos executados em sequência; decisões (nós predicativos) têm saídas V "
-                "(verdadeiro) e F (falso). V(G) é o número de caminhos linearmente independentes e o "
-                "mínimo de casos de teste para cobrir todas as arestas."))
+                "(verdadeiro) e F (falso). V(G) = número de caminhos linearmente independentes "
+                "(limite superior para cobrir as arestas)."))
     for titulo, ga, desc in (
         ("GFC 1 — contagem por comandos IF", g1, "O IF com OR é uma decisão só."),
         ("GFC 2 — contagem por condições simples", g2, "O OR é desdobrado em condições simples com curto-circuito."),
@@ -116,7 +128,7 @@ def montar_blocos(a: dict, textos_ia: dict[str, str], meta: dict) -> list:
         B.append(_p(f"Cobertura de arestas pelos casos: {ga['arestas_cobertas']} de {g.E}. "
                     f"Cobertura de nós: {ga['nos_cobertos']} de {g.N}."))
     if textos_ia.get("s2"):
-        B.append(_md(textos_ia["s2"]))
+        B.append(_md(textos_ia["s2"], modelo=_modelo_txt(textos_ia, "s2")))
 
     # --- Sprint 3 --------------------------------------------------------------
     B.append(_h1("Sprint 3 — Fluxo de Dados (Def-Uso) e Teste de Mutação"))
@@ -148,7 +160,7 @@ def montar_blocos(a: dict, textos_ia: dict[str, str], meta: dict) -> list:
     B.append(_p("Lista completa de mutantes:"))
     B.append(_tab(tabelas.mutantes(a["mutantes"]), [13, 11, 10, 42, 42, 28, 16, 28], fonte=5.8))
     if textos_ia.get("s3"):
-        B.append(_md(textos_ia["s3"]))
+        B.append(_md(textos_ia["s3"], modelo=_modelo_txt(textos_ia, "s3")))
 
     # --- Sprint 4 --------------------------------------------------------------
     B.append(_h1("Sprint 4 — Validação, Rastreabilidade (RTM) e Pitch"))
@@ -170,7 +182,8 @@ def montar_blocos(a: dict, textos_ia: dict[str, str], meta: dict) -> list:
         B.append(_h2("Execução automatizada com pytest"))
         B.append(_p(f"Resultado: {pt['resumo'] or pt['codigo']}. Arquivo: saida/test_cad0001_rtm.py "
                     "(cada caso marcado com @pytest.mark.requisito)."))
-        ultimas = "\n".join(pt["saida"].strip().splitlines()[-12:])
+        # caminhos do Windows vêm com "\"; no PDF ficam com "/"
+        ultimas = "\n".join(pt["saida"].strip().splitlines()[-12:]).replace("\\", "/")
         B.append(_code(ultimas))
     B.append(_h2("Painel de métricas"))
     B.append(_tab([
@@ -183,7 +196,7 @@ def montar_blocos(a: dict, textos_ia: dict[str, str], meta: dict) -> list:
         {"Métrica": "Requisitos testáveis com CT (RTM)", "Valor": f"{m['rtm'][0]} de {m['rtm'][1]}"},
     ], [100, 70]))
     if textos_ia.get("pitch"):
-        B.append(_md(textos_ia["pitch"], "Pitch de validação (gerado com o Gemini)"))
+        B.append(_md(textos_ia["pitch"], "Pitch de validação (gerado com o Gemini)", _modelo_txt(textos_ia, "pitch")))
     elif meta.get("pitch_local"):
         B.append(_md(meta["pitch_local"], "Pitch de validação"))
     return B
@@ -248,9 +261,55 @@ class _PDF(FPDF):
         self.cell(0, 6, f"{self.page_no()}/{{nb}}", align="C")
 
 
+_SIMBOLOS = {
+    "varepsilon": "ε", "epsilon": "ε", "times": "×", "cdot": "·", "leq": "≤", "le": "≤", "geq": "≥",
+    "ge": "≥", "neq": "≠", "ne": "≠", "approx": "≈", "rightarrow": "→", "to": "→", "Rightarrow": "⇒",
+    "leftarrow": "←", "leftrightarrow": "↔", "Leftrightarrow": "⇔", "implies": "⇒", "iff": "⇔",
+    "subset": "⊂", "subseteq": "⊆", "supset": "⊃", "supseteq": "⊇", "in": "∈", "notin": "∉",
+    "infty": "∞", "sum": "Σ", "Delta": "Δ", "delta": "δ", "alpha": "α", "beta": "β", "lambda": "λ",
+    "pi": "π", "mu": "μ", "sigma": "σ", "pm": "±", "ldots": "…", "dots": "…", "cdots": "…",
+    "cup": "∪", "cap": "∩", "forall": "∀", "exists": "∃", "neg": "¬", "lnot": "¬", "land": "∧",
+    "lor": "∨", "wedge": "∧", "vee": "∨", "lt": "<", "gt": ">", "quad": " ", "qquad": " ",
+    "left": "", "right": "", "displaystyle": "", "big": "", "Big": "",
+}
+_SOBRESCRITO = str.maketrans("0123456789+-n", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻ⁿ")
+
+
+def _latex_para_texto(t: str) -> str:
+    """Converte LaTeX que o Gemini às vezes escreve ($V(G)$, \\varepsilon, \\frac) em texto Unicode."""
+    t = re.sub(r"\\\[|\\\]|\\\(|\\\)", "", t)              # delimitadores \[ \] \( \)
+    t = re.sub(r"\$\$(.+?)\$\$", r"\1", t, flags=re.S)       # $$ ... $$
+    t = re.sub(r"(?<!\\)\$(.+?)(?<!\\)\$", r"\1", t)           # $ ... $
+    for _ in range(4):                                         # \frac{a}{b} (inclusive aninhado)
+        t = re.sub(r"\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}",
+                   lambda m: (f"({m[1]})" if re.search(r"[\s+−-]", m[1].strip()) else m[1]) + " / "
+                   + (f"({m[2]})" if re.search(r"[\s+−-]", m[2].strip()) else m[2]), t)
+    t = re.sub(r"\\(?:text|mathrm|mathbf|mathit|textbf|textit|operatorname|mbox)\s*\{([^{}]*)\}", r"\1", t)
+    t = re.sub(r"\^\{([0-9+\-n]+)\}", lambda m: m[1].translate(_SOBRESCRITO), t)
+    t = re.sub(r"\^([0-9n])", lambda m: m[1].translate(_SOBRESCRITO), t)
+    t = re.sub(r"_\{([^{}]*)\}", r"_\1", t)                   # p_{val1} -> p_val1
+    t = re.sub(r"\\([%_#&{}$])", r"\1", t)                     # \% \_ etc.
+    t = re.sub(r"\\[,;:! ]", " ", t)                           # espaços do LaTeX
+    t = re.sub(r"\\\\", " ", t)                                # quebra de linha \\
+    t = re.sub(r"\\([A-Za-z]+)", lambda m: _SIMBOLOS.get(m[1], m[1]), t)
+    t = t.replace("\\", "")
+    t = re.sub(r"(?<=[^\s{])\{([^{}]*)\}", r"\1", t)           # chaves que sobraram de grupos
+    return re.sub(r"[ \t]{2,}", " ", t)
+
+
+def _preparar_md_pdf(texto: str) -> str:
+    """Texto do Gemini para o PDF: sem LaTeX e sem separadores '---' (na tela fica igual)."""
+    linhas = []
+    for l in _latex_para_texto(texto).replace("\r", "").split("\n"):
+        if re.fullmatch(r"\s*([-*_])(\s*\1){2,}\s*", l):        # linha só com ---, *** ou ___
+            continue
+        linhas.append(l.replace("---", "—"))
+    return "\n".join(linhas)
+
+
 def _limpar_md(t: str) -> str:
     t = t.replace("`", "")
-    t = t.replace("--", "‐‐")  # no modo markdown do fpdf2, "--" vira sublinhado
+    t = t.replace("---", "—").replace("--", "–")  # no modo markdown do fpdf2, "--" vira sublinhado
     t = re.sub(r"(?<!\*)\*(?!\*)([^*\n]+)(?<!\*)\*(?!\*)", r"\1", t)  # *itálico* simples
     return t
 
@@ -423,11 +482,11 @@ class _Escritor:
             p.multi_cell(0, 4, legenda, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         p.ln(3)
 
-    def markdown(self, texto, titulo):
+    def markdown(self, texto, titulo, modelo=""):
         p = self.pdf
         self.h2(titulo)
         p.set_draw_color(37, 99, 235)
-        linhas = texto.replace("\r", "").split("\n")
+        linhas = _preparar_md_pdf(texto).split("\n")
         i = 0
         em_codigo = False
         buf_codigo: list[str] = []
@@ -471,6 +530,13 @@ class _Escritor:
             i += 1
         if buf_codigo:
             self.codigo("\n".join(buf_codigo))
+        if modelo:
+            p.ln(1)
+            p.set_font("dejavu", "I", 7.8)
+            p.set_text_color(*CINZA)
+            p.multi_cell(0, 4.2, modelo, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            p.set_text_color(*AZUL_ESCURO)
+            p.ln(2)
 
     def escrever(self, blocos):
         for b in blocos:
@@ -490,7 +556,7 @@ class _Escritor:
             elif tipo == "img":
                 self.imagem(b[1], b[2], b[3])
             elif tipo == "md":
-                self.markdown(b[1], b[2])
+                self.markdown(b[1], b[2], b[3])
         return bytes(self.pdf.output())
 
 
@@ -533,7 +599,7 @@ def gerar_markdown(a: dict, textos_ia: dict[str, str], meta: dict) -> str:
         elif tipo == "img":
             out += [f"_Figura: {b[3] or 'ver relatório PDF'}_", ""]
         elif tipo == "md":
-            out += [f"#### {b[2]}", "", b[1], ""]
+            out += [f"#### {b[2]}", "", b[1], ""] + ([f"_{b[3]}_", ""] if b[3] else [])
     return "\n".join(out)
 
 

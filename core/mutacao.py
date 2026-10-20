@@ -180,7 +180,9 @@ def ms_por_suite(f: Funcao, mutantes: list[Mutante], suites: dict[str, dict[str,
         copia = [Mutante(m.id, m.operador, m.linha, m.original, m.mutado, m.uid, m.acao) for m in mutantes]
         r = executar(f, copia, casos, equivalentes)
         linhas.append({"Suíte": nome, "Casos": len(casos), "Mortos": r["mortos"],
-                       "Vivos": r["vivos"], "MS": r["ms"]})
+                       "Vivos": r["vivos"], "MS": r["ms"],
+                       # só informativo (prompt do Gemini): quais mutantes sobreviveram a esta suíte
+                       "_vivos": [m for m in copia if m.status == "Vivo"]})
     return linhas
 
 

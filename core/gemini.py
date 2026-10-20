@@ -15,11 +15,76 @@ MODELOS_PADRAO = ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite
 INSTRUCAO = (
     "Você é um auditor de Teste de Software ajudando estudantes de Engenharia de Software "
     "(disciplina Teste de Software I, referência: Delamaro, Maldonado e Jino, 2007). "
-    "Responda em português do Brasil, com linguagem clara e objetiva, em Markdown. "
-    "Use SOMENTE os números e tabelas fornecidos no pedido: não invente valores, não "
-    "recalcule de outro jeito e não crie casos de teste novos que não estejam nos dados. "
-    "Se notar algo estranho nos dados, aponte como observação."
+    "Responda em português do Brasil, com linguagem clara e objetiva, em Markdown simples "
+    "(títulos, listas, negrito e tabelas).\n"
+    "Regras obrigatórias:\n"
+    "1. Explique usando SOMENTE os dados recebidos no pedido: não invente valores, não recalcule "
+    "de outro jeito e não crie casos de teste, mutantes ou exemplos que não estejam nos dados.\n"
+    "2. Em McCabe, V(G) = P + 1, onde P é o número de nós predicativos (nós de decisão). "
+    "V(G) é o número de caminhos linearmente independentes, um limite superior para cobrir as arestas.\n"
+    "3. Não use LaTeX nem cifrões ($), barras invertidas ou comandos como \\frac; escreva fórmulas em "
+    "texto, por exemplo: V(G) = E − N + 2, ε = 0,01, MS = mortos / (total − equivalentes).\n"
+    "4. Não use linhas separadoras (---) nem saudações (\"Olá!\"); comece direto no conteúdo.\n"
+    "5. Use vírgula decimal (100,0%) e os nomes dos operadores de mutação exatamente como no glossário "
+    "enviado. Se algo nos dados parecer estranho, aponte como observação."
 )
+
+
+# ---------------------------------------------------------------------------
+# Formatação dos dados enviados nos prompts (nada de tuplas ou floats crus)
+# ---------------------------------------------------------------------------
+
+
+def pct(x: float) -> str:
+    """0.795 -> '79,5%'."""
+    return f"{x * 100:.1f}%".replace(".", ",")
+
+
+def de(par) -> str:
+    """(5, 5) -> '5 de 5'."""
+    return f"{par[0]} de {par[1]}"
+
+
+def md_br(texto: str) -> str:
+    """Troca o ponto decimal de porcentagens ('79.5%') por vírgula."""
+    return re.sub(r"(\d+)\.(\d+)%", r"\1,\2%", texto)
+
+
+def glossario_operadores() -> str:
+    from .mutacao import OPERADORES
+
+    nomes = {"ROR": "troca de operador relacional", "AOR": "troca de operador aritmético",
+             "COR": "troca de conector lógico", "NUL": "inversão do teste de nulo",
+             "CRP": "troca de constante", "SDL": "remoção de comando",
+             "LVR": "troca de variável local (uma variável por outra da mesma família; não é valor literal)"}
+    return "\n".join(f"- {sig}: {nomes.get(sig, '')} — {desc}" for sig, desc in OPERADORES.items())
+
+
+def metricas_texto(m: dict) -> str:
+    """Métricas do painel em frases prontas (sem tuplas/floats)."""
+    eps = str(m["epsilon"]).replace(".", ",")
+    return "\n".join([
+        f"- Casos de teste: {m['casos']} ({m['aprovados']} de {m['casos']} conferem com o oráculo)",
+        f"- Épsilon (ε): {eps}",
+        f"- V(G): {m['vg1']} no GFC 1 (comandos IF) e {m['vg2']} no GFC 2 (condições simples)",
+        f"- Pares Def-Uso cobertos: {m['pares_du_cobertos']} de {m['pares_du']}",
+        f"- Mutantes mortos: {m['mortos']} de {m['mutantes']} (MS = {pct(m['ms'])})",
+        f"- Requisitos testáveis com caso de teste (RTM): {de(m['rtm'])}",
+    ])
+
+
+def vivos_por_suite(ms_suites: list[dict]) -> str:
+    """Lista os mutantes vivos de cada suíte (id, operador, linha e alteração)."""
+    linhas = []
+    for s in ms_suites:
+        vivos = s.get("_vivos", [])
+        cab = f"- {s['Suíte']} ({s['Casos']} casos): {s['Mortos']} mortos, {s['Vivos']} vivos, MS = {pct(s['MS'])}"
+        if not vivos:
+            linhas.append(cab + " — nenhum mutante vivo.")
+            continue
+        linhas.append(cab + ". Vivos:")
+        linhas += [f"  - {m.id} [{m.operador}] linha {m.linha}: `{m.original}` → `{m.mutado}`" for m in vivos]
+    return "\n".join(linhas)
 
 
 class ErroGemini(Exception):
@@ -147,22 +212,34 @@ Dados calculados pelo TestingStudio (Python):
 Explique, para um estudante:
 1. O que são nós, arestas, desvios V/F e caminhos linearmente independentes.
 2. Por que o GFC por comandos IF tem um V(G) e o GFC por condições simples tem outro (curto-circuito do OR).
-3. Como as três fórmulas de McCabe (E − N + 2, P + 1 e Regiões) chegam ao mesmo número.
-4. O que significa a cobertura de arestas obtida pelos casos de teste listados.
+3. Como as três fórmulas de McCabe chegam ao mesmo número: V(G) = E − N + 2, V(G) = P + 1 (P = nós
+   predicativos, isto é, nós de decisão) e V(G) = R (regiões, contando a externa).
+4. O que V(G) significa: número de caminhos linearmente independentes, um limite superior para cobrir
+   as arestas; e o que significa a cobertura de arestas obtida pelos casos de teste listados.
 Máximo ~400 palavras."""
 
 
-def prompt_sprint3(dados_md: str) -> str:
+def prompt_sprint3(dados_md: str, vivos_md: str) -> str:
     return f"""Explique os resultados de Teste Baseado em Defeitos (Fluxo de Dados e Mutação) do CAD0001.
 
 Dados calculados pelo TestingStudio (Python):
 {dados_md}
 
+Glossário dos operadores de mutação, como a ferramenta os implementa:
+{glossario_operadores()}
+
+Mutantes vivos em cada suíte de testes (id, operador, linha, comando original → mutante):
+{vivos_md}
+
 Escreva:
-1. **Fluxo de Dados** — o que são definições, c-usos e p-usos; comente os pares Def-Uso e a cobertura dos critérios de Rapps & Weyuker (Todas-Definições ⊂ Todos-Usos).
-2. **Mutação** — explique a hipótese do programador competente, os operadores usados e o Escore de Mutação (MS).
-3. **Comparação entre suítes** — por que algumas suítes matam menos mutantes (ex.: só AVL não detecta troca de * por /).
-4. **Mutantes vivos** — se houver, diga se parecem equivalentes ou se falta caso de teste.
+1. **Fluxo de Dados** — o que são definições, c-usos e p-usos; comente os pares Def-Uso e a cobertura dos
+   critérios de Rapps & Weyuker (Todas-Definições ⊂ Todos-Usos).
+2. **Mutação** — explique a hipótese do programador competente, os operadores usados (conforme o glossário)
+   e o Escore de Mutação: MS = mortos / (total − equivalentes).
+3. **Comparação entre suítes** — use a lista de vivos acima para dizer QUAIS mutantes cada suíte deixa
+   passar e que parte do código eles alteram (ex.: tratamento de NULL, regra de negativos). Não cite
+   mutantes que não estejam na lista.
+4. **Mutantes vivos na suíte completa** — se houver, diga se parecem equivalentes ou se falta caso de teste.
 Máximo ~450 palavras."""
 
 

@@ -149,3 +149,30 @@ def test_graficos_nos_dois_temas(escuro):
     ]
     assert all(graficos.png(fig).startswith(b"\x89PNG") for fig in figuras)
     assert f'bgcolor="{p["g-bg"]}"' in gfc.dot(a["g1"]["grafo"], tema=p)
+
+
+# --- textos do Gemini no PDF e prompts ------------------------------------------------
+
+def test_latex_vira_texto_no_pdf():
+    from core.relatorio import _preparar_md_pdf
+
+    bruto = (r"Temos $V(G) = E - N + 2$ e $\varepsilon = 0{,}01$." "\n---\n"
+             r"$$MS = \frac{mortos}{total - equivalentes} = 100\%$$ --- e $p_{val1} \geq 0$")
+    limpo = _preparar_md_pdf(bruto)
+    assert "$" not in limpo and "\\" not in limpo and "---" not in limpo
+    assert "ε = 0,01" in limpo and "mortos / (total - equivalentes)" in limpo and "p_val1 ≥ 0" in limpo
+
+
+def test_prompts_sem_tuplas_nem_floats():
+    from core import gemini
+
+    a = analise.analisar(MANUAL, "cad0001_calcula_valor")
+    texto = gemini.metricas_texto(a["metricas"])
+    assert "(5, 5)" not in texto and "5 de 5" in texto and "100,0%" in texto and "1.0" not in texto
+
+
+def test_vivos_da_suite_avl_sao_do_tratamento_de_null():
+    a = analise.analisar(MANUAL, "cad0001_calcula_valor")
+    avl = next(s for s in a["ms_suites"] if s["Suíte"] == "Só AVL")
+    assert avl["Vivos"] == len(avl["_vivos"]) == 15
+    assert all("IS NULL" in m.original or m.original.endswith("= 0") for m in avl["_vivos"])

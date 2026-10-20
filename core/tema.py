@@ -175,6 +175,10 @@ body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-
 [data-testid="stAlertContainer"]:has([data-testid="stAlertContentError"]) {{ background: var(--error-bg); border: 1px solid var(--error-border); }}
 [data-testid="stAlertContentError"] * {{ color: var(--error-text) !important; }}
 
+/* tela cheia (tabelas, gráficos e grafos): o contêiner expandido vinha com o fundo
+   fixo do tema base e dava um "clarão" no modo escuro */
+[data-testid="stFullScreenFrame"]:has([aria-label="Close fullscreen"]) {{ background: var(--bg) !important; }}
+
 /* ---------- elementos flutuantes (portais no <body>, fora do .stApp) ---------- */
 [data-testid="stTooltipContent"] {{
     background: var(--tooltip-bg) !important; color: var(--text) !important;

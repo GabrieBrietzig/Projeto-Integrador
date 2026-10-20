@@ -214,6 +214,7 @@ def botao_gemini(chave: str, rotulo: str, montar_prompt):
             with st.spinner(f"Consultando {modelo}... (pode levar de segundos a 2 minutos)"):
                 try:
                     IA[chave], IA[f"{chave}_modelo"] = gemini.gerar_com_modelo(api_key, modelo, montar_prompt())
+                    IA[f"{chave}_pedido"] = modelo  # para o relatório indicar troca automática
                     st.session_state.pop("pdf", None)  # PDF antigo não tem este texto
                 except gemini.ErroGemini as e:
                     st.error(str(e))
@@ -277,7 +278,7 @@ with aba1:
             f"AVL ({P[0]}):\n" + tabelas.markdown(tabelas.avl_param(S1["casos_avl"], P[0], P)),
             "Combinações:\n" + tabelas.markdown(tabelas.casos(S1["casos_cmb"], P, False)),
         ])
-        return gemini.prompt_sprint1(codigo, dados)
+        return gemini.prompt_sprint1(codigo, gemini.md_br(dados))
 
     botao_gemini("s1", "🤖 Gerar explicação com Gemini (PCE & AVL)", _p1)
 
@@ -311,8 +312,8 @@ with aba2:
         st.markdown("**Complexidade Ciclomática de McCabe**")
         tabela(tabelas.metricas_mccabe(G))
         if G.vg_arestas == G.vg_decisoes == G.regioes:
-            st.success(f"As três fórmulas batem: V(G) = {G.vg_arestas}. São necessários no mínimo "
-                       f"{G.vg_arestas} casos de teste para cobrir os caminhos independentes.")
+            st.success(f"As três fórmulas batem: V(G) = {G.vg_arestas}. V(G) = número de caminhos "
+                       "linearmente independentes (limite superior para cobrir as arestas).")
         else:
             st.warning("As fórmulas divergem — verifique decisões com mais de duas saídas.")
         st.metric("Cobertura de arestas", f"{GA['arestas_cobertas']}/{G.E}")
@@ -330,11 +331,13 @@ with aba2:
         partes = []
         for nome, ga in (("GFC 1 (comandos IF)", A["g1"]), ("GFC 2 (condições simples)", A["g2"])):
             g = ga["grafo"]
-            partes += [f"### {nome}", f"N={g.N}, E={g.E}, P={g.P}, V(G)={g.vg_arestas}, regiões={g.regioes}",
+            partes += [f"### {nome}",
+                       f"Nós N = {g.N}, arestas E = {g.E}, nós predicativos P = {g.P}, regiões R = {g.regioes}. "
+                       f"V(G) = E − N + 2 = {g.vg_arestas}; V(G) = P + 1 = {g.vg_decisoes}.",
                        tabelas.markdown(tabelas.nos(g)),
                        tabelas.markdown(tabelas.caminhos(g, ga["casos"], P)),
-                       f"Cobertura de arestas: {ga['arestas_cobertas']}/{g.E}"]
-        return gemini.prompt_sprint2("\n\n".join(partes))
+                       f"Cobertura de arestas: {ga['arestas_cobertas']} de {g.E}"]
+        return gemini.prompt_sprint2(gemini.md_br("\n\n".join(partes)))
 
     botao_gemini("s2", "🤖 Gerar explicação de Caixa-Branca com Gemini", _p2)
 
@@ -435,13 +438,13 @@ with aba3:
             "Anotações:\n" + tabelas.markdown(tabelas.anotacoes(DU["anotacoes"])),
             "Pares DU:\n" + tabelas.markdown(tabelas.pares(DU["pares"])),
             "Critérios:\n" + tabelas.markdown(tabelas.criterios(DU["criterios"])),
-            f"Mutação: total={R['total']}, mortos={R['mortos']}, vivos={R['vivos']}, "
-            f"equivalentes={R['equivalentes']}, MS={R['ms'] * 100:.1f}%",
+            f"Mutação (suíte completa): {R['total']} mutantes, {R['mortos']} mortos, {R['vivos']} vivos, "
+            f"{R['equivalentes']} equivalentes; MS = {gemini.pct(R['ms'])}",
             "Por operador:\n" + tabelas.markdown(tabelas.por_operador(R)),
             "MS por suíte:\n" + tabelas.markdown(tabelas.ms_suites(A["ms_suites"])),
-            "Mutantes vivos:\n" + (tabelas.markdown(tabelas.mutantes(vivos)) if vivos else "nenhum"),
+            "Mutantes vivos na suíte completa:\n" + (tabelas.markdown(tabelas.mutantes(vivos)) if vivos else "nenhum"),
         ])
-        return gemini.prompt_sprint3(dados)
+        return gemini.prompt_sprint3(gemini.md_br(dados), gemini.vivos_por_suite(A["ms_suites"]))
 
     botao_gemini("s3", "🤖 Gerar explicação de Dados & Mutantes com Gemini", _p3)
 
@@ -492,12 +495,13 @@ with aba4:
         st.caption("Resumo montado sem IA. Use o botão para o Gemini escrever o pitch.")
 
     def _p4():
-        partes = [f"Métricas: {M}"]
+        partes = ["Métricas:\n" + gemini.metricas_texto(M)]
         for nome, v in A["validacao"].items():
-            partes.append(f"{nome}: {v['passaram']}/{len(v['casos'])} conferem.\n" + tabelas.markdown(tabelas.rtm(v["rtm"])))
+            partes.append(f"{nome}: {v['passaram']} de {len(v['casos'])} casos conferem.\n"
+                          + tabelas.markdown(tabelas.rtm(v["rtm"])))
         if pt:
             partes.append(f"pytest: {pt['resumo']}")
-        return gemini.prompt_pitch("\n\n".join(partes))
+        return gemini.prompt_pitch(gemini.md_br("\n\n".join(partes)))
 
     botao_gemini("pitch", "🤖 Gerar pitch com Gemini", _p4)
 
@@ -521,6 +525,7 @@ with aba5:
             if not IA.get(k):
                 try:
                     IA[k], IA[f"{k}_modelo"] = gemini.gerar_com_modelo(api_key, modelo, fn())
+                    IA[f"{k}_pedido"] = modelo
                     st.session_state.pop("pdf", None)
                 except gemini.ErroGemini as e:
                     st.error(f"{k}: {e}")

@@ -100,7 +100,8 @@ def por_operador(resumo: dict) -> list[dict]:
 
 
 def ms_suites(linhas) -> list[dict]:
-    return [{**l, "MS": f"{l['MS'] * 100:.1f}%"} for l in linhas]
+    return [{**{k: v for k, v in l.items() if not k.startswith("_")}, "MS": f"{l['MS'] * 100:.1f}%"}
+            for l in linhas]
 
 
 def rtm(linhas) -> list[dict]:
