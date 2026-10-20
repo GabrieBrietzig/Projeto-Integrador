@@ -1,0 +1,13 @@
+# Tema base (claro). O modo escuro é aplicado pelo toggle "🌙 Modo escuro" da barra
+# lateral, que injeta as variáveis de core/tema.py. Mantenha as cores iguais às do CLARO.
+[theme]
+base = "light"
+primaryColor = "#0F766E"
+backgroundColor = "#F7F8FA"
+secondaryBackgroundColor = "#EEF1F5"
+textColor = "#1F2937"
+borderColor = "#D7DCE3"
+codeFont = "monospace"
+
+[browser]
+gatherUsageStats = false

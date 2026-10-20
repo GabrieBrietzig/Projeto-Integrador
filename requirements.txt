@@ -1,0 +1,7 @@
+streamlit>=1.50
+pandas>=2.2
+google-genai>=1.0
+fpdf2>=2.8
+matplotlib>=3.9
+pillow>=10.0
+pytest>=8.0
